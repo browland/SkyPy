@@ -15,6 +15,11 @@
 ## [12:55:56] Ben Rowland: !time
 ## [12:55:56] Ben Rowland: SkyPy says: Sat, 19 Nov 2011 12:55:56 +0000
 ##
+## There are also commands to disable and enable the bot.  These will
+## merely disable or enable the bot from making responses to a chat
+## - it can still be enabled via the appropriate command after being disabled.
+## These commands are !boton and !botoff.
+##
 
 ## Required for the bot to function
 import Skype4Py
@@ -35,8 +40,19 @@ chatTopicWhiteList = []
 ## respond to messages in chats where *all* users are in this white-list.
 userWhiteList = []
 
+## Valid commands
+validCommands = ['!time', '!boton', '!botoff']
+
+## Whether this bot is enabled.  If disabled, it will be silent until it receives
+## a !boton command.
+botEnabled = True
+
+## Prefix of all messages sent by bot.  Important to prevent the bot responding
+## to itself which could in some cases lead to infinite recursion and flooding.
+responsePrefix = botName + ' says: '
+
 ## Whether the bot should dump messages it will respond to (for debugging).
-dumpMessages = True
+dumpMessages = False
 
 def handleInternal(msgBody, chat):
     """
@@ -44,15 +60,37 @@ def handleInternal(msgBody, chat):
     Currently only a '!time' function is provided, but this
     method could dispatch to external modules for many more commands.
     """
-    if msgBody == '!time':
-        print 'OK, handling command ...'
-        resp = botName + ' says: ' + strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
+    global botEnabled
+    resp = None
+
+    if msgBody in validCommands:
+        print 'OK, handling command:', msgBody
+        respToSend = False
+
+        if msgBody == '!time':
+            resp = responsePrefix + strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
+            respToSend = True
+        elif msgBody == '!boton':
+            print 'Enabling bot ...'
+            botEnabled = True
+        elif msgBody == '!botoff':
+            print 'Disabling bot ...'
+            botEnabled = False
+        else:
+            print 'Missing code for command', msgBody
+
+        ## Conditionally send a response to the chat the command came from
+        if respToSend:
+            if botEnabled:
+                if resp:
+                    chat.SendMessage(resp)
+                else:
+                    print 'ERROR: Somehow we think we should respond but no response set!'
+            else:
+                print 'Not sending message as bot is currently disabled'
     else:
         print 'Unknown Command [%s]' % msgBody
         return
-
-    ## Send the response to Skype
-    chat.SendMessage(resp)
 
 def parseAndDumpMsg(msg):
     """
@@ -76,7 +114,7 @@ def shouldRespond(msg):
     """
     
     ## Ignore msgs from this bot to avoid recursion ...
-    if botName + ' says:' in msg.Body:
+    if responsePrefix in msg.Body:
         return False
 
     ## Filter so we only respond to white-listed chat Topics ...
